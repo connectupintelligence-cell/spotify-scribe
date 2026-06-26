@@ -557,7 +557,7 @@ function processSpotifyLink() {
           headers: {
             "Content-Type": "application/json"
           },
-          body: JSON.stringify({ url: url })
+          body: JSON.stringify({ url: url, language: defaultLanguage })
         });
         
         if (!response.ok) {
@@ -905,6 +905,35 @@ function exportTranscript(format) {
     filename += ".srt";
     triggerDownload(content, filename, "text/srt");
   }
+}
+
+function copyTranscriptToClipboard() {
+  if (!currentEpisode || !currentEpisode.transcript) return;
+  
+  const text = currentEpisode.transcript
+    .map(line => `[${formatTime(line.start)}] ${line.speaker}: ${line.text}`)
+    .join("\r\n");
+    
+  navigator.clipboard.writeText(text)
+    .then(() => {
+      const btn = document.getElementById("btn-copy-transcript");
+      if (btn) {
+        const originalHTML = btn.innerHTML;
+        btn.innerHTML = '<i class="fa-solid fa-circle-check"></i> Copiado!';
+        btn.style.color = "#1db954";
+        btn.style.borderColor = "#1db954";
+        
+        setTimeout(() => {
+          btn.innerHTML = originalHTML;
+          btn.style.color = "";
+          btn.style.borderColor = "";
+        }, 2000);
+      }
+    })
+    .catch(err => {
+      console.error("Erro ao copiar transcrição:", err);
+      alert("Não foi possível copiar a transcrição para a área de transferência.");
+    });
 }
 
 function triggerDownload(content, filename, contentType) {
