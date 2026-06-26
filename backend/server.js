@@ -34,6 +34,21 @@ app.post("/api/transcribe", async (req, res) => {
 
     console.log(`[Transcribe] Iniciando processamento para URL: ${url}`);
 
+    // Extrair ID e tipo de mídia da URL do Spotify
+    let episodeId = "ep_" + Date.now();
+    let mediaType = "episode";
+    
+    try {
+      const parsedUrl = new URL(url);
+      const pathParts = parsedUrl.pathname.split("/").filter(Boolean);
+      if (pathParts.length >= 2) {
+        mediaType = pathParts[0]; // e.g. "episode", "show", "track"
+        episodeId = pathParts[1]; // e.g. "3Ur84Kfs82Jh98saHD8D"
+      }
+    } catch (e) {
+      console.warn("[URL Parser] Não foi possível parsear a URL para extrair tipo/ID:", e.message);
+    }
+
     // 1. Obter metadados do Spotify oEmbed
     let oembedData = null;
     try {
@@ -233,119 +248,32 @@ app.post("/api/transcribe", async (req, res) => {
       }
     }
 
-    // Fallback de Transcrição Inteligente com GPT se não houver Deepgram ou se a transcrição falhou
+    // Fallback de Transcrição se não houver Deepgram ou se a transcrição falhou
     if (transcript.length === 0) {
-      console.log("[GPT] Gerando transcrição contextual simulada via OpenAI GPT...");
-      const openaiKey = process.env.OPENAI_API_KEY;
-
-      if (openaiKey) {
-        try {
-          const gptResponse = await axios.post(
-            "https://api.openai.com/v1/chat/completions",
-            {
-              model: "gpt-3.5-turbo",
-              messages: [
-                {
-                  role: "system",
-                  content: "Você é um assistente de IA que gera transcrições simuladas realistas de podcasts. Você deve simular o diálogo inicial entre os participantes de forma natural baseado no título e show name fornecidos. Retorne estritamente um array de objetos JSON no formato: [{\"start\": 0, \"speaker\": \"Apresentador\", \"text\": \"Texto do diálogo\"}]. Crie um diálogo contendo exatamente 6 a 8 falas alternando entre os participantes, com carimbos de tempo ('start') em segundos iniciando em 0 até cerca de 90 segundos."
-                },
-                {
-                  role: "user",
-                  content: `Gere o diálogo simulado para o podcast: Título: "${realTitle}" | Show: "${realShow}"`
-                }
-              ]
-            },
-            {
-              headers: {
-                "Authorization": `Bearer ${openaiKey}`,
-                "Content-Type": "application/json"
-              }
-            }
-          );
-
-          const resultText = gptResponse.data.choices[0].message.content.trim();
-          // Remove possíveis blocos de Markdown ```json
-          const cleanJsonText = resultText.replace(/^```json/, "").replace(/```$/, "").trim();
-          transcript = JSON.parse(cleanJsonText);
-          transcriptionEngine = "openai-gpt-simulated";
-          console.log("[GPT] Transcrição contextual gerada com sucesso!");
-        } catch (gptErr) {
-          console.error("[GPT] Erro ao gerar transcrição simulada:", gptErr.message);
-        }
-      }
-
-      // Fallback estático se nem o GPT responder
-      if (transcript.length === 0) {
-        console.log("[Fallback] Carregando transcrição genérica estática.");
-        transcript = [
-          { start: 0, speaker: "Locutor A", text: `Olá! Iniciamos a análise do link de áudio para o episódio "${realTitle}".` },
-          { start: 10, speaker: "Locutor A", text: `Este conteúdo é fornecido pelo canal "${realShow}".` },
-          { start: 20, speaker: "Locutor B", text: "Para transcrever áudios longos na íntegra de forma 100% real, configure as chaves de API da Deepgram e OpenAI no arquivo .env do seu servidor backend." },
-          { start: 35, speaker: "Locutor B", text: "O site permite a audição e edição completa das falas ativando o 'Modo Edição' acima." },
-          { start: 48, speaker: "Locutor A", text: "Selecione as opções de exportar para baixar a legenda SRT ou arquivo TXT localmente." }
-        ];
-      }
+      console.log("[Fallback] Carregando transcrição genérica estática.");
+      transcript = [
+        { start: 0, speaker: "Locutor A", text: `Olá! Carregamos com sucesso o link do episódio "${realTitle}".` },
+        { start: 10, speaker: "Locutor A", text: `Este conteúdo é apresentado por "${realShow}".` },
+        { start: 20, speaker: "Locutor B", text: "Para realizar transcrições reais de áudio, certifique-se de configurar a API key da Deepgram (DEEPGRAM_API_KEY) no arquivo .env do seu servidor backend." },
+        { start: 35, speaker: "Locutor B", text: "O player sincronizado permite clicar em qualquer frase para pular o áudio para o tempo correspondente." },
+        { start: 48, speaker: "Locutor A", text: "Você também pode exportar o resultado como legenda SRT ou arquivo de texto TXT." }
+      ];
     }
 
-    // 5. Gerar Resumos e Insights Reais com OpenAI GPT
+    // 5. Insights estáticos (geração de resumo dinâmico via OpenAI removida)
     let aiInsights = {
-      summary: `Resumo do episódio '${realTitle}' de '${realShow}'. O conteúdo aborda discussões gerais do tema.`,
+      summary: `Resumo do episódio '${realTitle}' de '${realShow}'. (Geração de resumo automático desativada no momento).`,
       keyTakeaways: [
         "Metadados e detalhes do episódio carregados de forma automatizada.",
-        "Link de reprodução de áudio original obtido por feed RSS.",
-        "Transcrição estruturada gerada pelo motor inteligente."
+        "Link de reprodução de áudio original obtido via feed RSS.",
+        "A extração de insights por inteligência artificial está temporariamente desativada."
       ],
       actionItems: [
         "Acompanhar o canal original para novos lançamentos.",
         "Baixar o arquivo TXT ou SRT da transcrição no topo da página."
       ],
-      topics: ["Podcast", realShow, "Inovação"]
+      topics: ["Podcast", realShow || "Spotify"]
     };
-
-    const openaiKey = process.env.OPENAI_API_KEY;
-    if (openaiKey && transcript.length > 0) {
-      try {
-        console.log("[GPT] Gerando resumos e insights estruturados...");
-        
-        // Junta as primeiras falas da transcrição para alimentar o prompt do resumo
-        const sampleText = transcript.map(t => `${t.speaker}: ${t.text}`).join("\n").substring(0, 4000);
-        
-        const gptSummaryResponse = await axios.post(
-          "https://api.openai.com/v1/chat/completions",
-          {
-            model: "gpt-3.5-turbo",
-            messages: [
-              {
-                role: "system",
-                content: "Você é um assistente de IA especialista em resumir áudios. Responda estritamente em formato JSON estruturado (em português) contendo exatamente estes campos: summary (um parágrafo curto de resumo), keyTakeaways (lista/array de até 4 pontos-chave), actionItems (lista/array de até 3 lições práticas) e topics (lista/array de até 5 palavras-chave curtas)."
-              },
-              {
-                role: "user",
-                content: `Analise os metadados e trecho da transcrição deste episódio:\nTítulo: "${realTitle}"\nShow: "${realShow}"\n\nTrecho:\n${sampleText}`
-              }
-            ],
-            response_format: { type: "json_object" }
-          },
-          {
-            headers: {
-              "Authorization": `Bearer ${openaiKey}`,
-              "Content-Type": "application/json"
-            }
-          }
-        );
-
-        const summaryResult = JSON.parse(gptSummaryResponse.data.choices[0].message.content.trim());
-        aiInsights = {
-          summary: summaryResult.summary || aiInsights.summary,
-          keyTakeaways: summaryResult.keyTakeaways || aiInsights.keyTakeaways,
-          actionItems: summaryResult.actionItems || aiInsights.actionItems,
-          topics: summaryResult.topics || aiInsights.topics
-        };
-        console.log("[GPT] Resumo de IA gerado com sucesso!");
-      } catch (sumErr) {
-        console.error("[GPT] Erro ao gerar resumo estruturado:", sumErr.message);
-      }
-    }
 
     // 6. Retornar resposta completa montada
     const responsePayload = {

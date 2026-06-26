@@ -17,7 +17,6 @@ let searchMatches = [];
 let currentMatchIndex = -1;
 
 // Settings
-let whisperApiKey = "";
 let defaultLanguage = "pt-BR";
 let backendUrl = "http://localhost:3000";
 
@@ -75,15 +74,12 @@ window.addEventListener("DOMContentLoaded", () => {
 // Settings Management
 function loadSettings() {
   try {
-    whisperApiKey = localStorage.getItem("scribe_whisper_key") || "";
     defaultLanguage = localStorage.getItem("scribe_language") || "pt-BR";
     backendUrl = localStorage.getItem("scribe_backend_url") || "http://localhost:3000";
     
-    const keyInput = document.getElementById("api-whisper-key");
     const langSelect = document.getElementById("transcription-language");
     const backendInput = document.getElementById("api-backend-url");
     
-    if (keyInput) keyInput.value = whisperApiKey;
     if (langSelect) langSelect.value = defaultLanguage;
     if (backendInput) backendInput.value = backendUrl;
   } catch (e) {
@@ -93,15 +89,12 @@ function loadSettings() {
 
 function saveSettings() {
   try {
-    const key = document.getElementById("api-whisper-key").value.trim();
     const lang = document.getElementById("transcription-language").value;
     const bUrl = document.getElementById("api-backend-url").value.trim() || "http://localhost:3000";
     
-    localStorage.setItem("scribe_whisper_key", key);
     localStorage.setItem("scribe_language", lang);
     localStorage.setItem("scribe_backend_url", bUrl);
     
-    whisperApiKey = key;
     defaultLanguage = lang;
     backendUrl = bUrl;
     
@@ -769,119 +762,18 @@ function handleAudioFile(file) {
   });
 }
 
-// Transcrição real usando OpenAI Whisper API (se configurado) ou Fallback estruturado
+// Transcrição de áudio local
 function runLocalSpeechRecognition(file, episode) {
-  if (whisperApiKey) {
-    showLoader("Transcrevendo com OpenAI Whisper...", "Enviando áudio para processamento de IA. Isso pode levar alguns minutos dependendo do tamanho do arquivo.", async () => {
-      try {
-        const formData = new FormData();
-        formData.append("file", file);
-        formData.append("model", "whisper-1");
-        formData.append("response_format", "verbose_json");
-        
-        if (defaultLanguage) {
-          formData.append("language", defaultLanguage.split("-")[0]);
-        }
-        
-        const response = await fetch("https://api.openai.com/v1/audio/transcriptions", {
-          method: "POST",
-          headers: {
-            "Authorization": `Bearer ${whisperApiKey}`
-          },
-          body: formData
-        });
-        
-        if (!response.ok) {
-          const errData = await response.json();
-          throw new Error(errData.error?.message || "Erro na API do Whisper.");
-        }
-        
-        const data = await response.json();
-        
-        // Mapeia os segmentos reais com timestamps retornados pelo Whisper
-        if (data.segments && data.segments.length > 0) {
-          episode.transcript = data.segments.map(seg => ({
-            start: Math.round(seg.start),
-            speaker: `Orador ${seg.id % 2 === 0 ? 'A' : 'B'}`,
-            text: seg.text.trim()
-          }));
-          
-          // Tenta gerar um resumo e insights reais baseados na transcrição real via GPT
-          try {
-            await generateRealSummary(data.text, episode);
-          } catch (sumErr) {
-            console.warn("Erro ao gerar resumo real, usando padrão:", sumErr);
-          }
-        } else {
-          // Fallback se não vier segmentos detalhados
-          episode.transcript = [
-            { start: 0, speaker: "Orador Único", text: data.text }
-          ];
-        }
-        
-        episode.durationSeconds = Math.round(data.duration || episode.durationSeconds);
-        episode.duration = formatTime(episode.durationSeconds);
-        
-        loadEpisodeData(episode);
-      } catch (error) {
-        console.error("Erro na API do Whisper:", error);
-        alert("Falha na transcrição real do Whisper: " + error.message + "\n\nCarregando demonstração funcional local para testes.");
-        loadDemoTranscript(episode);
-      }
-    });
-    return;
-  }
-  
-  // Sem chave API: exibe aviso e carrega demonstração interativa
-  alert("Como não há chave de API da OpenAI salva nas configurações, o app carregará uma transcrição de demonstração interativa para você testar os controles.");
+  // Transcrição automática via OpenAI Whisper desativada
+  alert("A transcrição automática de arquivos locais foi desativada. Carregando demonstração funcional local.");
   loadDemoTranscript(episode);
-}
-
-// Gera resumo de IA real via GPT baseado no texto transcrito
-async function generateRealSummary(transcriptText, episode) {
-  try {
-    const response = await fetch("https://api.openai.com/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${whisperApiKey}`
-      },
-      body: JSON.stringify({
-        model: "gpt-3.5-turbo",
-        messages: [
-          {
-            role: "system",
-            content: "Você é um assistente de IA especialista em resumir áudios. Responda estritamente em formato JSON estruturado (em português) contendo exatamente estes campos: summary (um parágrafo curto de resumo), keyTakeaways (lista/array de até 4 pontos-chave), actionItems (lista/array de até 3 lições práticas) e topics (lista/array de até 5 palavras-chave curtas)."
-          },
-          {
-            role: "user",
-            content: `Analise a seguinte transcrição e responda no formato JSON solicitado:\n\n${transcriptText.substring(0, 4500)}`
-          }
-        ]
-      })
-    });
-    
-    if (response.ok) {
-      const data = await response.json();
-      const content = JSON.parse(data.choices[0].message.content);
-      
-      episode.aiInsights = {
-        summary: content.summary || episode.aiInsights.summary,
-        keyTakeaways: content.keyTakeaways || episode.aiInsights.keyTakeaways,
-        actionItems: content.actionItems || episode.aiInsights.actionItems,
-        topics: content.topics || episode.aiInsights.topics
-      };
-    }
-  } catch (err) {
-    console.warn("Falha ao gerar resumo estruturado por IA:", err);
-  }
 }
 
 // Carrega dados simulados funcionais para arquivos de áudio
 function loadDemoTranscript(episode) {
   episode.transcript = [
     { start: 0, speaker: "Palestrante", text: "Olá! O arquivo de áudio local foi importado com sucesso para a interface de trabalho." },
-    { start: 6, speaker: "Palestrante", text: "Para transcrever arquivos reais do zero de forma automática, acesse o ícone de engrenagem no topo e configure sua Chave de API da OpenAI (Whisper)." },
+    { start: 6, speaker: "Palestrante", text: "A transcrição automática de áudio local está desativada no momento." },
     { start: 17, speaker: "Palestrante", text: "Enquanto isso, você pode testar este player sincronizado: clique em qualquer palavra para pular o áudio, faça buscas ou clique em 'Modo Edição' para alterar o texto." }
   ];
   loadEpisodeData(episode);
