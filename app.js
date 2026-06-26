@@ -477,16 +477,22 @@ function processSpotifyLink() {
   const url = spotifyUrlInput.value.trim();
   
   if (!url) {
-    alert("Por favor, cole um link de episódio do Spotify!");
+    alert("Por favor, cole um link do Spotify!");
     return;
   }
   
-  if (!url.includes("spotify.com") || !url.includes("episode")) {
-    alert("Por favor, cole um link de EPISÓDIO do Spotify válido (ex: https://open.spotify.com/episode/...)");
+  // Validação ampla para cobrir spotify.com, spotify.link, spoti.fi e URIs do desktop
+  const isSpotify = url.includes("spotify.com") || 
+                    url.includes("spotify.link") || 
+                    url.includes("spoti.fi") || 
+                    url.startsWith("spotify:");
+                    
+  if (!isSpotify) {
+    alert("Por favor, cole um link válido do Spotify (ex: https://open.spotify.com/episode/... ou link compartilhado de celular)!");
     return;
   }
 
-  // Check if it matches a mock episode ID or name for an instant demo match
+  // Verifica se coincide com algum episódio mockado para demonstração imediata
   let mockMatch = null;
   if (url.includes("3Ur84Kfs82Jh98saHD8D")) {
     mockMatch = "flow-artificial-intelligence";
@@ -503,13 +509,31 @@ function processSpotifyLink() {
     return;
   }
 
-  // Extract simulated episode ID from URL
-  const match = url.match(/episode\/([a-zA-Z0-9]+)/);
-  const episodeId = match ? match[1] : "ep_" + Date.now().toString(36);
+  // Tenta extrair o tipo de mídia (episode, track, show, playlist) e o ID
+  let mediaType = "episode";
+  let episodeId = "";
   
-  // Create a realistic simulated episode
+  if (url.includes("track")) mediaType = "track";
+  else if (url.includes("show")) mediaType = "show";
+  else if (url.includes("playlist")) mediaType = "playlist";
+
+  const match = url.match(/(episode|track|show|playlist)\/([a-zA-Z0-9]+)/);
+  if (match) {
+    episodeId = match[2];
+    mediaType = match[1];
+  } else {
+    const uriMatch = url.match(/(episode|track|show|playlist):([a-zA-Z0-9]+)/);
+    if (uriMatch) {
+      episodeId = uriMatch[2];
+      mediaType = uriMatch[1];
+    } else {
+      // Para links curtos (spotify.link / spoti.fi) onde o ID não está na URL
+      episodeId = "sp_" + Math.random().toString(36).substring(2, 9);
+    }
+  }
+  
   showLoader("Acessando Spotify API...", "Simulando a extração do stream de áudio e executando motor de Inteligência Artificial para transcrição e resumos.", () => {
-    const newEpisode = generateSimulatedEpisode(episodeId, url);
+    const newEpisode = generateSimulatedEpisode(episodeId, url, mediaType);
     loadEpisodeData(newEpisode);
   });
 }
@@ -545,8 +569,8 @@ function showLoader(title, desc, callback) {
   }, 250);
 }
 
-// Generate Realistic Transcript & Summaries for a custom Spotify URL
-function generateSimulatedEpisode(id, url) {
+// Gera dados simulados realistas adaptados para episódios, músicas ou shows do Spotify
+function generateSimulatedEpisode(id, url, mediaType = "episode") {
   const titles = [
     "Scribe Cast - Empreendedorismo de Alta Performance",
     "Café com Tecnologia - O Futuro das Criptomoedas e Web3",
@@ -557,9 +581,22 @@ function generateSimulatedEpisode(id, url) {
   const categories = ["Negócios", "Tecnologia", "Carreira", "Design"];
   
   const randomIndex = Math.floor(Math.random() * titles.length);
-  const title = titles[randomIndex];
-  const showName = shows[randomIndex];
-  const category = categories[randomIndex];
+  let title = titles[randomIndex];
+  let showName = shows[randomIndex];
+  let category = categories[randomIndex];
+  
+  // Adaptações de rótulos com base no tipo de mídia
+  if (mediaType === "track") {
+    title = `Música: Sintonia Eletrônica (Track ID: ${id.substring(0,6)})`;
+    showName = "Artista Convidado";
+    category = "Música & Cultura";
+  } else if (mediaType === "show") {
+    title = `Show Completo: ${showName} - Temporada de Inverno`;
+    category = "Podcast Show";
+  } else if (mediaType === "playlist") {
+    title = `Playlist Transcrita: As Melhores de ${category}`;
+    showName = "Curadoria Scribe";
+  }
   
   return {
     id: id,
@@ -567,13 +604,13 @@ function generateSimulatedEpisode(id, url) {
     showName: showName,
     spotifyUrl: url,
     coverUrl: `https://images.unsplash.com/photo-${1614680376593 + randomIndex}?q=80&w=300&h=300&fit=crop`,
-    audioUrl: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-4.mp3", // generic playable sound track
+    audioUrl: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-4.mp3",
     duration: "04:10",
     durationSeconds: 250,
     dateAdded: new Date().toISOString().split("T")[0],
     category: category,
     aiInsights: {
-      summary: `Resumo gerado automaticamente para o episódio '${title}' do canal '${showName}'. O tema central discute as tendências tecnológicas de 2026, com foco em desenvolvimento ágil, inteligência artificial integrada, otimização de fluxos de trabalho e as estratégias mais eficazes para profissionais modernos se destacarem.`,
+      summary: `Resumo gerado automaticamente para o conteúdo '${title}' (${mediaType}) do canal/artista '${showName}'. O tema central discute as tendências de mercado, otimização de fluxos de trabalho e as estratégias mais eficazes para profissionais modernos se destacarem.`,
       keyTakeaways: [
         "A velocidade de iteração é o principal diferencial em mercados competitivos.",
         "Design systems facilitam a escalabilidade de interfaces em larga escala.",
@@ -586,12 +623,12 @@ function generateSimulatedEpisode(id, url) {
       topics: ["Inovação", "Planejamento", "Produtividade", category]
     },
     transcript: [
-      { start: 0, speaker: "Host", text: "Olá ouvintes! Sejam bem-vindos a mais um episódio do nosso podcast semanal sobre as novidades do mercado." },
-      { start: 15, speaker: "Host", text: "Hoje vamos trazer dicas fundamentais para você impulsionar sua carreira e utilizar tecnologia a seu favor." },
-      { start: 30, speaker: "Convidado", text: "É um prazer estar aqui! Acredito que o principal ponto hoje em dia é aprender a automatizar processos simples para focar nas estratégias." },
-      { start: 50, speaker: "Host", text: "Concordo plenamente. Quem perde muito tempo fazendo tarefas manuais acaba sendo engolido pela concorrência." },
-      { start: 70, speaker: "Convidado", text: "Exato, e com ferramentas integradas de produtividade, podemos criar protótipos de alta qualidade em menos da metade do tempo anterior." },
-      { start: 95, speaker: "Host", text: "Excelente ponto! Vamos aprofundar nessa questão técnica logo após um rápido intervalo." }
+      { start: 0, speaker: "Locutor A", text: "Olá! Sejam bem-vindos a mais um conteúdo do nosso canal semanal." },
+      { start: 15, speaker: "Locutor A", text: "Hoje vamos trazer dicas fundamentais para você impulsionar sua carreira e utilizar tecnologia a seu favor." },
+      { start: 30, speaker: "Locutor B", text: "É um prazer estar aqui! Acredito que o principal ponto hoje em dia é aprender a automatizar processos simples para focar nas estratégias." },
+      { start: 50, speaker: "Locutor A", text: "Concordo plenamente. Quem perde muito tempo fazendo tarefas manuais acaba sendo engolido pela concorrência." },
+      { start: 70, speaker: "Locutor B", text: "Exato, e com ferramentas integradas de produtividade, podemos criar protótipos de alta qualidade em menos da metade do tempo anterior." },
+      { start: 95, speaker: "Locutor A", text: "Excelente ponto! Vamos aprofundar nessa questão técnica logo após um rápido intervalo." }
     ]
   };
 }
