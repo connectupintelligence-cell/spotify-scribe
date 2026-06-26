@@ -56,37 +56,54 @@ const searchNavControls = document.getElementById("search-nav-controls");
 
 // Initialize application on load
 window.addEventListener("DOMContentLoaded", () => {
-  loadSettings();
-  renderHistory();
-  setupDragAndDrop();
-  
-  // Volume setup
-  if (audio) {
-    audio.volume = parseFloat(volumeSlider.value);
+  try {
+    loadSettings();
+    renderHistory();
+    setupDragAndDrop();
+    
+    // Volume setup
+    if (audio && volumeSlider) {
+      audio.volume = parseFloat(volumeSlider.value);
+    }
+  } catch (error) {
+    console.error("Erro na inicialização da aplicação:", error);
+    alert("Erro ao inicializar o app: " + error.message);
   }
 });
 
 // Settings Management
 function loadSettings() {
-  whisperApiKey = localStorage.getItem("scribe_whisper_key") || "";
-  defaultLanguage = localStorage.getItem("scribe_language") || "pt-BR";
-  
-  document.getElementById("api-whisper-key").value = whisperApiKey;
-  document.getElementById("transcription-language").value = defaultLanguage;
+  try {
+    whisperApiKey = localStorage.getItem("scribe_whisper_key") || "";
+    defaultLanguage = localStorage.getItem("scribe_language") || "pt-BR";
+    
+    const keyInput = document.getElementById("api-whisper-key");
+    const langSelect = document.getElementById("transcription-language");
+    
+    if (keyInput) keyInput.value = whisperApiKey;
+    if (langSelect) langSelect.value = defaultLanguage;
+  } catch (e) {
+    console.warn("LocalStorage bloqueado ou indisponível ao carregar configurações:", e);
+  }
 }
 
 function saveSettings() {
-  const key = document.getElementById("api-whisper-key").value.trim();
-  const lang = document.getElementById("transcription-language").value;
-  
-  localStorage.setItem("scribe_whisper_key", key);
-  localStorage.setItem("scribe_language", lang);
-  
-  whisperApiKey = key;
-  defaultLanguage = lang;
-  
-  toggleSettingsModal(false);
-  alert("Configurações salvas com sucesso!");
+  try {
+    const key = document.getElementById("api-whisper-key").value.trim();
+    const lang = document.getElementById("transcription-language").value;
+    
+    localStorage.setItem("scribe_whisper_key", key);
+    localStorage.setItem("scribe_language", lang);
+    
+    whisperApiKey = key;
+    defaultLanguage = lang;
+    
+    toggleSettingsModal(false);
+    alert("Configurações salvas com sucesso!");
+  } catch (e) {
+    console.error("Falha ao salvar configurações em LocalStorage:", e);
+    alert("Não foi possível salvar as configurações localmente. Verifique se o seu navegador bloqueia cookies/armazenamento local.");
+  }
 }
 
 function toggleSettingsModal(show) {
@@ -132,68 +149,86 @@ function loadMockEpisode(id) {
 
 // Load and Display Episode Data in Workspace
 function loadEpisodeData(episode) {
-  currentEpisode = JSON.parse(JSON.stringify(episode)); // deep clone
-  
-  // Reset audio & player state
-  audio.src = currentEpisode.audioUrl;
-  audio.playbackRate = playbackSpeed;
-  audio.load();
-  
-  isPlaying = false;
-  playBtn.innerHTML = '<i class="fa-solid fa-play"></i>';
-  
-  // Workspace Header
-  wsEpisodeCover.src = currentEpisode.coverUrl;
-  wsShowName.textContent = currentEpisode.showName;
-  wsEpisodeTitle.textContent = currentEpisode.title;
-  wsDateAdded.innerHTML = `<i class="fa-regular fa-calendar"></i> ${formatDateString(currentEpisode.dateAdded)}`;
-  wsDuration.innerHTML = `<i class="fa-regular fa-clock"></i> ${currentEpisode.duration}`;
-  wsSpotifyLink.href = currentEpisode.spotifyUrl;
-  
-  // Bottom Player Settings
-  document.getElementById("player-track-cover").src = currentEpisode.coverUrl;
-  document.getElementById("player-track-title").textContent = currentEpisode.title;
-  document.getElementById("player-track-show").textContent = currentEpisode.showName;
-  
-  // Insights Sidebar
-  insightsSummary.textContent = currentEpisode.aiInsights.summary;
-  
-  insightsTakeaways.innerHTML = currentEpisode.aiInsights.keyTakeaways
-    .map(takeaway => `<li>${takeaway}</li>`)
-    .join("");
+  try {
+    if (!episode) throw new Error("Dados do episódio ausentes.");
+    currentEpisode = JSON.parse(JSON.stringify(episode)); // deep clone
     
-  insightsActions.innerHTML = currentEpisode.aiInsights.actionItems
-    .map(action => `<li>${action}</li>`)
-    .join("");
-    
-  insightsTopics.innerHTML = currentEpisode.aiInsights.topics
-    .map(topic => `<span class="tag-badge" onclick="filterByTopic('${topic}')">${topic}</span>`)
-    .join("");
-  
-  // Render Transcript Lines
-  renderTranscript();
-  
-  // Reset Search
-  searchInput.value = "";
-  searchMatches = [];
-  currentMatchIndex = -1;
-  searchNavControls.style.display = "none";
-  
-  // Toggle Views
-  emptyState.style.display = "none";
-  loaderState.style.display = "none";
-  activeWorkspace.style.display = "flex";
-  
-  // Highlight active sidebar item
-  document.querySelectorAll(".episode-card-small").forEach(card => {
-    card.classList.remove("active");
-    if (card.getAttribute("data-id") === currentEpisode.id) {
-      card.classList.add("active");
+    // Reset áudio & estado do player
+    if (audio) {
+      audio.src = currentEpisode.audioUrl;
+      audio.playbackRate = playbackSpeed;
+      audio.load();
     }
-  });
-  
-  // Save to history if not already there
-  saveToHistory(currentEpisode);
+    
+    isPlaying = false;
+    if (playBtn) playBtn.innerHTML = '<i class="fa-solid fa-play"></i>';
+    
+    // Painel Header do Workspace
+    if (wsEpisodeCover) wsEpisodeCover.src = currentEpisode.coverUrl;
+    if (wsShowName) wsShowName.textContent = currentEpisode.showName;
+    if (wsEpisodeTitle) wsEpisodeTitle.textContent = currentEpisode.title;
+    if (wsDateAdded) wsDateAdded.innerHTML = `<i class="fa-regular fa-calendar"></i> ${formatDateString(currentEpisode.dateAdded)}`;
+    if (wsDuration) wsDuration.innerHTML = `<i class="fa-regular fa-clock"></i> ${currentEpisode.duration}`;
+    if (wsSpotifyLink) wsSpotifyLink.href = currentEpisode.spotifyUrl;
+    
+    // Rótulos do player inferior
+    const playerTrackCover = document.getElementById("player-track-cover");
+    const playerTrackTitle = document.getElementById("player-track-title");
+    const playerTrackShow = document.getElementById("player-track-show");
+    
+    if (playerTrackCover) playerTrackCover.src = currentEpisode.coverUrl;
+    if (playerTrackTitle) playerTrackTitle.textContent = currentEpisode.title;
+    if (playerTrackShow) playerTrackShow.textContent = currentEpisode.showName;
+    
+    // Painel Lateral de IA (Insights)
+    if (insightsSummary) insightsSummary.textContent = currentEpisode.aiInsights.summary;
+    
+    if (insightsTakeaways) {
+      insightsTakeaways.innerHTML = currentEpisode.aiInsights.keyTakeaways
+        .map(takeaway => `<li>${takeaway}</li>`)
+        .join("");
+    }
+      
+    if (insightsActions) {
+      insightsActions.innerHTML = currentEpisode.aiInsights.actionItems
+        .map(action => `<li>${action}</li>`)
+        .join("");
+    }
+      
+    if (insightsTopics) {
+      insightsTopics.innerHTML = currentEpisode.aiInsights.topics
+        .map(topic => `<span class="tag-badge" onclick="filterByTopic('${topic}')">${topic}</span>`)
+        .join("");
+    }
+    
+    // Renderiza linhas de transcrição
+    renderTranscript();
+    
+    // Reseta Pesquisa
+    if (searchInput) searchInput.value = "";
+    searchMatches = [];
+    currentMatchIndex = -1;
+    if (searchNavControls) searchNavControls.style.display = "none";
+    
+    // Alterna Views
+    if (emptyState) emptyState.style.display = "none";
+    if (loaderState) loaderState.style.display = "none";
+    if (activeWorkspace) activeWorkspace.style.display = "flex";
+    
+    // Destaca item ativo no menu lateral
+    document.querySelectorAll(".episode-card-small").forEach(card => {
+      card.classList.remove("active");
+      if (card.getAttribute("data-id") === currentEpisode.id) {
+        card.classList.add("active");
+      }
+    });
+    
+    // Salva no histórico se for novo
+    saveToHistory(currentEpisode);
+  } catch (error) {
+    console.error("Erro ao carregar dados do episódio no workspace:", error);
+    alert("Ocorreu um erro ao carregar os detalhes do áudio: " + error.message);
+  }
 }
 
 // Render Transcript Lines inside the viewer
@@ -474,68 +509,81 @@ function filterByTopic(topic) {
 
 // Process Spotify URL Pasted
 function processSpotifyLink() {
-  const url = spotifyUrlInput.value.trim();
-  
-  if (!url) {
-    alert("Por favor, cole um link do Spotify!");
-    return;
-  }
-  
-  // Validação ampla para cobrir spotify.com, spotify.link, spoti.fi e URIs do desktop
-  const isSpotify = url.includes("spotify.com") || 
-                    url.includes("spotify.link") || 
-                    url.includes("spoti.fi") || 
-                    url.startsWith("spotify:");
-                    
-  if (!isSpotify) {
-    alert("Por favor, cole um link válido do Spotify (ex: https://open.spotify.com/episode/... ou link compartilhado de celular)!");
-    return;
-  }
-
-  // Verifica se coincide com algum episódio mockado para demonstração imediata
-  let mockMatch = null;
-  if (url.includes("3Ur84Kfs82Jh98saHD8D")) {
-    mockMatch = "flow-artificial-intelligence";
-  } else if (url.includes("5asf89HDF32hd82hd")) {
-    mockMatch = "nerdcast-tecnologia-futuro";
-  } else if (url.includes("2HFDJ82hdsaHDuh82")) {
-    mockMatch = "podpah-tecnologia-favela";
-  }
-  
-  if (mockMatch) {
-    showLoader("Buscando dados no Spotify...", "Localizando metadados do episódio e carregando transcrição estruturada.", () => {
-      loadMockEpisode(mockMatch);
-    });
-    return;
-  }
-
-  // Tenta extrair o tipo de mídia (episode, track, show, playlist) e o ID
-  let mediaType = "episode";
-  let episodeId = "";
-  
-  if (url.includes("track")) mediaType = "track";
-  else if (url.includes("show")) mediaType = "show";
-  else if (url.includes("playlist")) mediaType = "playlist";
-
-  const match = url.match(/(episode|track|show|playlist)\/([a-zA-Z0-9]+)/);
-  if (match) {
-    episodeId = match[2];
-    mediaType = match[1];
-  } else {
-    const uriMatch = url.match(/(episode|track|show|playlist):([a-zA-Z0-9]+)/);
-    if (uriMatch) {
-      episodeId = uriMatch[2];
-      mediaType = uriMatch[1];
-    } else {
-      // Para links curtos (spotify.link / spoti.fi) onde o ID não está na URL
-      episodeId = "sp_" + Math.random().toString(36).substring(2, 9);
+  try {
+    const url = spotifyUrlInput.value.trim();
+    
+    if (!url) {
+      alert("Por favor, cole um link do Spotify!");
+      return;
     }
+    
+    // Validação ampla para cobrir spotify.com, spotify.link, spoti.fi e URIs do desktop
+    const isSpotify = url.includes("spotify.com") || 
+                      url.includes("spotify.link") || 
+                      url.includes("spoti.fi") || 
+                      url.startsWith("spotify:");
+                      
+    if (!isSpotify) {
+      alert("Por favor, cole um link válido do Spotify (ex: https://open.spotify.com/episode/... ou link compartilhado de celular)!");
+      return;
+    }
+
+    // Verifica se coincide com algum episódio mockado para demonstração imediata
+    let mockMatch = null;
+    if (url.includes("3Ur84Kfs82Jh98saHD8D")) {
+      mockMatch = "flow-artificial-intelligence";
+    } else if (url.includes("5asf89HDF32hd82hd")) {
+      mockMatch = "nerdcast-tecnologia-futuro";
+    } else if (url.includes("2HFDJ82hdsaHDuh82")) {
+      mockMatch = "podpah-tecnologia-favela";
+    }
+    
+    if (mockMatch) {
+      showLoader("Buscando dados no Spotify...", "Localizando metadados do episódio e carregando transcrição estruturada.", () => {
+        try {
+          loadMockEpisode(mockMatch);
+        } catch (e) {
+          alert("Erro ao carregar dados do mock: " + e.message);
+        }
+      });
+      return;
+    }
+
+    // Tenta extrair o tipo de mídia (episode, track, show, playlist) e o ID
+    let mediaType = "episode";
+    let episodeId = "";
+    
+    if (url.includes("track")) mediaType = "track";
+    else if (url.includes("show")) mediaType = "show";
+    else if (url.includes("playlist")) mediaType = "playlist";
+
+    const match = url.match(/(episode|track|show|playlist)\/([a-zA-Z0-9]+)/);
+    if (match) {
+      episodeId = match[2];
+      mediaType = match[1];
+    } else {
+      const uriMatch = url.match(/(episode|track|show|playlist):([a-zA-Z0-9]+)/);
+      if (uriMatch) {
+        episodeId = uriMatch[2];
+        mediaType = uriMatch[1];
+      } else {
+        // Para links curtos (spotify.link / spoti.fi) onde o ID não está na URL
+        episodeId = "sp_" + Math.random().toString(36).substring(2, 9);
+      }
+    }
+    
+    showLoader("Acessando Spotify API...", "Simulando a extração do stream de áudio e executando motor de Inteligência Artificial para transcrição e resumos.", () => {
+      try {
+        const newEpisode = generateSimulatedEpisode(episodeId, url, mediaType);
+        loadEpisodeData(newEpisode);
+      } catch (e) {
+        alert("Erro ao finalizar a transcrição simulada: " + e.message);
+      }
+    });
+  } catch (error) {
+    console.error("Erro ao iniciar processamento do link:", error);
+    alert("Falha ao iniciar processamento: " + error.message);
   }
-  
-  showLoader("Acessando Spotify API...", "Simulando a extração do stream de áudio e executando motor de Inteligência Artificial para transcrição e resumos.", () => {
-    const newEpisode = generateSimulatedEpisode(episodeId, url, mediaType);
-    loadEpisodeData(newEpisode);
-  });
 }
 
 function showLoader(title, desc, callback) {
@@ -755,44 +803,55 @@ function runLocalSpeechRecognition(file, episode) {
 
 // History & LocalStorage Persistence
 function saveToHistory(episode) {
-  let history = getHistory();
-  
-  // Check if already exists, update it, otherwise insert
-  const index = history.findIndex(item => item.id === episode.id);
-  if (index !== -1) {
-    history[index] = episode;
-  } else {
-    history.unshift(episode); // add to top
+  try {
+    let history = getHistory();
+    
+    // Atualiza se já existe, caso contrário insere no início
+    const index = history.findIndex(item => item.id === episode.id);
+    if (index !== -1) {
+      history[index] = episode;
+    } else {
+      history.unshift(episode);
+    }
+    
+    localStorage.setItem("scribe_history", JSON.stringify(history));
+    renderHistory();
+  } catch (e) {
+    console.warn("Falha ao salvar no histórico do LocalStorage (ex: limite excedido ou modo privado):", e);
   }
-  
-  localStorage.setItem("scribe_history", JSON.stringify(history));
-  renderHistory();
 }
 
 function updateHistoryItem(episode) {
-  let history = getHistory();
-  const index = history.findIndex(item => item.id === episode.id);
-  if (index !== -1) {
-    history[index] = episode;
-    localStorage.setItem("scribe_history", JSON.stringify(history));
-    renderHistory();
+  try {
+    let history = getHistory();
+    const index = history.findIndex(item => item.id === episode.id);
+    if (index !== -1) {
+      history[index] = episode;
+      localStorage.setItem("scribe_history", JSON.stringify(history));
+      renderHistory();
+    }
+  } catch (e) {
+    console.warn("Falha ao atualizar item no histórico:", e);
   }
 }
 
 function deleteHistoryItem(id, event) {
-  if (event) event.stopPropagation();
-  
-  if (confirm("Deseja realmente remover esta transcrição da biblioteca?")) {
-    let history = getHistory();
-    history = history.filter(item => item.id !== id);
-    localStorage.setItem("scribe_history", JSON.stringify(history));
+  try {
+    if (event) event.stopPropagation();
     
-    // If the deleted item is the currently loaded one, show home
-    if (currentEpisode && currentEpisode.id === id) {
-      showHome();
-    } else {
-      renderHistory();
+    if (confirm("Deseja realmente remover esta transcrição da biblioteca?")) {
+      let history = getHistory();
+      history = history.filter(item => item.id !== id);
+      localStorage.setItem("scribe_history", JSON.stringify(history));
+      
+      if (currentEpisode && currentEpisode.id === id) {
+        showHome();
+      } else {
+        renderHistory();
+      }
     }
+  } catch (e) {
+    console.warn("Falha ao remover item do histórico:", e);
   }
 }
 
