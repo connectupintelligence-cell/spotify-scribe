@@ -19,6 +19,7 @@ let currentMatchIndex = -1;
 // Settings
 let whisperApiKey = "";
 let defaultLanguage = "pt-BR";
+let backendUrl = "http://localhost:3000";
 
 // Elements
 const audio = document.getElementById("main-audio-element");
@@ -76,12 +77,15 @@ function loadSettings() {
   try {
     whisperApiKey = localStorage.getItem("scribe_whisper_key") || "";
     defaultLanguage = localStorage.getItem("scribe_language") || "pt-BR";
+    backendUrl = localStorage.getItem("scribe_backend_url") || "http://localhost:3000";
     
     const keyInput = document.getElementById("api-whisper-key");
     const langSelect = document.getElementById("transcription-language");
+    const backendInput = document.getElementById("api-backend-url");
     
     if (keyInput) keyInput.value = whisperApiKey;
     if (langSelect) langSelect.value = defaultLanguage;
+    if (backendInput) backendInput.value = backendUrl;
   } catch (e) {
     console.warn("LocalStorage bloqueado ou indisponível ao carregar configurações:", e);
   }
@@ -91,12 +95,15 @@ function saveSettings() {
   try {
     const key = document.getElementById("api-whisper-key").value.trim();
     const lang = document.getElementById("transcription-language").value;
+    const bUrl = document.getElementById("api-backend-url").value.trim() || "http://localhost:3000";
     
     localStorage.setItem("scribe_whisper_key", key);
     localStorage.setItem("scribe_language", lang);
+    localStorage.setItem("scribe_backend_url", bUrl);
     
     whisperApiKey = key;
     defaultLanguage = lang;
+    backendUrl = bUrl;
     
     toggleSettingsModal(false);
     alert("Configurações salvas com sucesso!");
@@ -549,116 +556,30 @@ function processSpotifyLink() {
       return;
     }
 
-    // Tenta extrair o tipo de mídia (episode, track, show, playlist) e o ID
-    let mediaType = "episode";
-    let episodeId = "";
-    
-    if (url.includes("track")) mediaType = "track";
-    else if (url.includes("show")) mediaType = "show";
-    else if (url.includes("playlist")) mediaType = "playlist";
-
-    const match = url.match(/(episode|track|show|playlist)\/([a-zA-Z0-9]+)/);
-    if (match) {
-      episodeId = match[2];
-      mediaType = match[1];
-    } else {
-      const uriMatch = url.match(/(episode|track|show|playlist):([a-zA-Z0-9]+)/);
-      if (uriMatch) {
-        episodeId = uriMatch[2];
-        mediaType = uriMatch[1];
-      } else {
-        // Para links curtos (spotify.link / spoti.fi) onde o ID não está na URL
-        episodeId = "sp_" + Math.random().toString(36).substring(2, 9);
-      }
-    }
-    
-    // Inicia loader e faz requisição de metadados à API oEmbed pública do Spotify
-    showLoader("Acessando metadados do Spotify...", "Obtendo título, capa e informações do episódio em tempo real.", async () => {
+    // Envia a requisição para o nosso backend Express para fazer a transcrição real via feed RSS
+    showLoader("Conectando ao Backend...", "O servidor está localizando o feed RSS e processando a transcrição real do áudio via IA...", async () => {
       try {
-        const oembedUrl = `https://open.spotify.com/oembed?url=${encodeURIComponent(url)}`;
+        const response = await fetch(`${backendUrl}/api/transcribe`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({ url: url })
+        });
         
-        // Chamada real ao oEmbed (com timeout curto para evitar esperas eternas)
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 6000);
-        
-        let response;
-        try {
-          // Tenta chamada direta primeiro (Spotify oEmbed suporta CORS nativo)
-          response = await fetch(oembedUrl, { signal: controller.signal });
-        } catch (directErr) {
-          console.warn("Chamada direta ao Spotify oEmbed falhou (CORS/rede), tentando via proxy:", directErr);
-          try {
-            const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(oembedUrl)}`;
-            response = await fetch(proxyUrl, { signal: controller.signal });
-          } catch (proxyErr) {
-            throw new Error("Ambas as conexões (direta e proxy) falharam ao consultar o Spotify.");
-          }
+        if (!response.ok) {
+          const errData = await response.json();
+          throw new Error(errData.error || "Erro desconhecido no servidor.");
         }
-        clearTimeout(timeoutId);
         
-        if (!response.ok) throw new Error("A resposta do servidor do Spotify não foi bem-sucedida.");
         const data = await response.json();
         
-        // Trata os metadados reais obtidos
-        let realTitle = data.title || "Conteúdo do Spotify";
-        let realShow = "Spotify Creator";
-        
-        // Spotify oEmbed formata o título como "Título do Episódio - show Nome do Show", "Título do Episódio by Nome do Artista" ou "Título do Episódio | Nome do Show"
-        if (realTitle.includes(" - show ")) {
-          const parts = realTitle.split(" - show ");
-          realTitle = parts[0].trim();
-          realShow = parts[1].trim();
-        } else if (realTitle.includes(" | ")) {
-          const parts = realTitle.split(" | ");
-          realTitle = parts[0].trim();
-          realShow = parts[1].trim();
-        } else if (realTitle.includes(" by ")) {
-          const parts = realTitle.split(" by ");
-          realTitle = parts[0].trim();
-          realShow = parts[1].trim();
-        }
-        
-        const realCover = data.thumbnail_url || "https://images.unsplash.com/photo-1614680376593?q=80&w=300&h=300&fit=crop";
-        
-        // Gera o objeto do episódio usando metadados reais
-        const realEpisode = {
-          id: episodeId,
-          title: realTitle,
-          showName: realShow,
-          spotifyUrl: url,
-          coverUrl: realCover,
-          audioUrl: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-4.mp3", // Áudio demo tocável
-          duration: "04:10",
-          durationSeconds: 250,
-          dateAdded: new Date().toISOString().split("T")[0],
-          category: mediaType === "track" ? "Música" : (mediaType === "show" ? "Podcast Show" : "Podcast"),
-          aiInsights: {
-            summary: `Resumo gerado automaticamente a partir dos dados do Spotify para o conteúdo '${realTitle}' do canal '${realShow}'.`,
-            keyTakeaways: [
-              "Link original do Spotify lido e validado com sucesso.",
-              "Metadados de imagem de capa e título extraídos em tempo real.",
-              "Por restrições de DRM e segurança (CORS), o stream de áudio cru do Spotify é criptografado. Um áudio de demonstração foi acoplado para permitir os testes de salto temporal e realce."
-            ],
-            actionItems: [
-              "Para transcrever o áudio integral original, faça o upload do arquivo de áudio (MP3/WAV) correspondente na página inicial do Scribe."
-            ],
-            topics: ["Spotify Link", realShow, mediaType]
-          },
-          transcript: [
-            { start: 0, speaker: "Spotify Scribe", text: `Olá! Carregamos com sucesso o link: "${realTitle}" apresentado por "${realShow}".` },
-            { start: 8, speaker: "Spotify Scribe", text: "Este é um player de áudio e transcrição sincronizado. Como o Spotify criptografa seus arquivos, este áudio serve como teste de funcionalidade." },
-            { start: 18, speaker: "Instruções", text: "Clique em qualquer uma das frases deste texto para pular o áudio para o respectivo tempo." },
-            { start: 26, speaker: "Instruções", text: "Você também pode clicar em 'Modo Edição' acima para reescrever as falas ou ajustar os nomes dos locutores." },
-            { start: 35, speaker: "Instruções", text: "Use o botão de exportar TXT ou SRT para baixar a transcrição final localmente." }
-          ]
-        };
-        
-        loadEpisodeData(realEpisode);
+        // Carrega o episódio real retornado do backend
+        loadEpisodeData(data);
       } catch (e) {
-        console.warn("Falha ao consultar oEmbed do Spotify, usando gerador simulado:", e);
-        // Fallback robusto se a chamada de rede ou processamento falhar
-        const fallbackEpisode = generateSimulatedEpisode(episodeId, url, mediaType);
-        loadEpisodeData(fallbackEpisode);
+        console.error("Erro ao chamar o backend de transcrição:", e);
+        alert("Não foi possível transcrever usando o backend: " + e.message + 
+              "\n\nCertifique-se de que o seu servidor backend está rodando em '" + backendUrl + "' ou ajuste o endereço nas Configurações (ícone de engrenagem no topo).");
       }
     });
   } catch (error) {

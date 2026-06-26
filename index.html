@@ -4,6 +4,33 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Spotify Scribe - Transcritor Inteligente de Podcasts</title>
+  
+  <!-- Diagnostic Script for JS Errors -->
+  <script>
+    window.onerror = function(message, source, lineno, colno, error) {
+      const errDiv = document.createElement('div');
+      errDiv.id = 'js-debug-error-banner';
+      errDiv.style.position = 'fixed';
+      errDiv.style.top = '0';
+      errDiv.style.left = '0';
+      errDiv.style.width = '100%';
+      errDiv.style.backgroundColor = '#ef4444';
+      errDiv.style.color = 'white';
+      errDiv.style.padding = '16px';
+      errDiv.style.zIndex = '99999';
+      errDiv.style.fontFamily = 'monospace';
+      errDiv.style.fontSize = '13px';
+      errDiv.style.lineHeight = '1.5';
+      errDiv.style.boxShadow = '0 4px 20px rgba(0,0,0,0.5)';
+      errDiv.style.whiteSpace = 'pre-wrap';
+      errDiv.innerHTML = '<strong>[Erro de JS Detectado]</strong><br>' + 
+                          message + '<br>' +
+                          'Arquivo: ' + source.split('/').pop() + ' (Linha: ' + lineno + ', Coluna: ' + colno + ')';
+      document.body.appendChild(errDiv);
+      return false;
+    };
+  </script>
+
   <!-- SEO Meta Tags -->
   <meta name="description" content="Transcreva qualquer episódio do Spotify em segundos. Sincronize áudio e texto, pesquise termos, gere resumos automáticos por IA e guarde tudo na sua biblioteca.">
   <meta name="keywords" content="spotify, transcrição, podcast, transcritor de áudio, whisper, ia, inteligência artificial, srt, legenda">
@@ -260,6 +287,10 @@
         <label class="form-label" for="api-whisper-key">Chave de API OpenAI (Whisper)</label>
         <input type="password" id="api-whisper-key" class="form-input" placeholder="sk-proj-...">
         <span class="form-note">Forneça sua chave para transcrever arquivos de áudio reais diretamente pelo modelo Whisper da OpenAI. O processamento é local em seu navegador e a chave fica armazenada apenas no seu dispositivo.</span>
+      </div>      <div class="form-group">
+        <label class="form-label" for="api-backend-url">URL do Servidor Backend</label>
+        <input type="text" id="api-backend-url" class="form-input" placeholder="http://localhost:3000">
+        <span class="form-note">Endereço do seu servidor de transcrição (Node.js). Padrão local: http://localhost:3000.</span>
       </div>
 
       <div class="form-group">
@@ -270,7 +301,6 @@
           <option value="es-ES">Espanhol (Espanha)</option>
         </select>
       </div>
-
       <button class="btn-primary" style="margin-top: 10px; width: 100%; justify-content: center;" onclick="saveSettings()">
         Salvar Configurações
       </button>
