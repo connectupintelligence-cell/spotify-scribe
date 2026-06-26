@@ -575,16 +575,17 @@ function processSpotifyLink() {
     // Inicia loader e faz requisição de metadados à API oEmbed pública do Spotify
     showLoader("Acessando metadados do Spotify...", "Obtendo título, capa e informações do episódio em tempo real.", async () => {
       try {
-        const oembedUrl = `https://open.spotify.com/oembed?url=${encodeURIComponent(url)}`;
+                const oembedUrl = `https://open.spotify.com/oembed?url=${encodeURIComponent(url)}`;
+        const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(oembedUrl)}`;
         
-        // Chamada real ao oEmbed (com timeout curto para evitar esperas eternas)
+        // Chamada real ao oEmbed via proxy CORS (com timeout curto para evitar esperas eternas)
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 6000);
         
-        const response = await fetch(oembedUrl, { signal: controller.signal });
+        const response = await fetch(proxyUrl, { signal: controller.signal });
         clearTimeout(timeoutId);
         
-        if (!response.ok) throw new Error("Não foi possível obter dados públicos deste link.");
+        if (!response.ok) throw new Error("Não foi possível obter dados públicos deste link via proxy.");
         const data = await response.json();
         
         // Trata os metadados reais obtidos
