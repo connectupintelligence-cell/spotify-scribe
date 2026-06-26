@@ -572,12 +572,77 @@ function processSpotifyLink() {
       }
     }
     
-    showLoader("Acessando Spotify API...", "Simulando a extração do stream de áudio e executando motor de Inteligência Artificial para transcrição e resumos.", () => {
+    // Inicia loader e faz requisição de metadados à API oEmbed pública do Spotify
+    showLoader("Acessando metadados do Spotify...", "Obtendo título, capa e informações do episódio em tempo real.", async () => {
       try {
-        const newEpisode = generateSimulatedEpisode(episodeId, url, mediaType);
-        loadEpisodeData(newEpisode);
+        const oembedUrl = `https://open.spotify.com/oembed?url=${encodeURIComponent(url)}`;
+        
+        // Chamada real ao oEmbed (com timeout curto para evitar esperas eternas)
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 6000);
+        
+        const response = await fetch(oembedUrl, { signal: controller.signal });
+        clearTimeout(timeoutId);
+        
+        if (!response.ok) throw new Error("Não foi possível obter dados públicos deste link.");
+        const data = await response.json();
+        
+        // Trata os metadados reais obtidos
+        let realTitle = data.title || "Conteúdo do Spotify";
+        let realShow = "Spotify Creator";
+        
+        // Spotify oEmbed formata o título como "Título do Episódio - show Nome do Show" ou "Título do Episódio by Nome do Artista"
+        if (realTitle.includes(" - show ")) {
+          const parts = realTitle.split(" - show ");
+          realTitle = parts[0];
+          realShow = parts[1];
+        } else if (realTitle.includes(" by ")) {
+          const parts = realTitle.split(" by ");
+          realTitle = parts[0];
+          realShow = parts[1];
+        }
+        
+        const realCover = data.thumbnail_url || "https://images.unsplash.com/photo-1614680376593?q=80&w=300&h=300&fit=crop";
+        
+        // Gera o objeto do episódio usando metadados reais
+        const realEpisode = {
+          id: episodeId,
+          title: realTitle,
+          showName: realShow,
+          spotifyUrl: url,
+          coverUrl: realCover,
+          audioUrl: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-4.mp3", // Áudio demo tocável
+          duration: "04:10",
+          durationSeconds: 250,
+          dateAdded: new Date().toISOString().split("T")[0],
+          category: mediaType === "track" ? "Música" : (mediaType === "show" ? "Podcast Show" : "Podcast"),
+          aiInsights: {
+            summary: `Resumo gerado automaticamente a partir dos dados do Spotify para o conteúdo '${realTitle}' do canal '${realShow}'.`,
+            keyTakeaways: [
+              "Link original do Spotify lido e validado com sucesso.",
+              "Metadados de imagem de capa e título extraídos em tempo real.",
+              "Por restrições de DRM e segurança (CORS), o stream de áudio cru do Spotify é criptografado. Um áudio de demonstração foi acoplado para permitir os testes de salto temporal e realce."
+            ],
+            actionItems: [
+              "Para transcrever o áudio integral original, faça o upload do arquivo de áudio (MP3/WAV) correspondente na página inicial do Scribe."
+            ],
+            topics: ["Spotify Link", realShow, mediaType]
+          },
+          transcript: [
+            { start: 0, speaker: "Spotify Scribe", text: `Olá! Carregamos com sucesso o link: "${realTitle}" apresentado por "${realShow}".` },
+            { start: 8, speaker: "Spotify Scribe", text: "Este é um player de áudio e transcrição sincronizado. Como o Spotify criptografa seus arquivos, este áudio serve como teste de funcionalidade." },
+            { start: 18, speaker: "Instruções", text: "Clique em qualquer uma das frases deste texto para pular o áudio para o respectivo tempo." },
+            { start: 26, speaker: "Instruções", text: "Você também pode clicar em 'Modo Edição' acima para reescrever as falas ou ajustar os nomes dos locutores." },
+            { start: 35, speaker: "Instruções", text: "Use o botão de exportar TXT ou SRT para baixar a transcrição final localmente." }
+          ]
+        };
+        
+        loadEpisodeData(realEpisode);
       } catch (e) {
-        alert("Erro ao finalizar a transcrição simulada: " + e.message);
+        console.warn("Falha ao consultar oEmbed do Spotify, usando gerador simulado:", e);
+        // Fallback robusto se a chamada de rede ou processamento falhar
+        const fallbackEpisode = generateSimulatedEpisode(episodeId, url, mediaType);
+        loadEpisodeData(fallbackEpisode);
       }
     });
   } catch (error) {
