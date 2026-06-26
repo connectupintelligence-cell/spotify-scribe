@@ -603,15 +603,19 @@ function processSpotifyLink() {
         let realTitle = data.title || "Conteúdo do Spotify";
         let realShow = "Spotify Creator";
         
-        // Spotify oEmbed formata o título como "Título do Episódio - show Nome do Show" ou "Título do Episódio by Nome do Artista"
+        // Spotify oEmbed formata o título como "Título do Episódio - show Nome do Show", "Título do Episódio by Nome do Artista" ou "Título do Episódio | Nome do Show"
         if (realTitle.includes(" - show ")) {
           const parts = realTitle.split(" - show ");
-          realTitle = parts[0];
-          realShow = parts[1];
+          realTitle = parts[0].trim();
+          realShow = parts[1].trim();
+        } else if (realTitle.includes(" | ")) {
+          const parts = realTitle.split(" | ");
+          realTitle = parts[0].trim();
+          realShow = parts[1].trim();
         } else if (realTitle.includes(" by ")) {
           const parts = realTitle.split(" by ");
-          realTitle = parts[0];
-          realShow = parts[1];
+          realTitle = parts[0].trim();
+          realShow = parts[1].trim();
         }
         
         const realCover = data.thumbnail_url || "https://images.unsplash.com/photo-1614680376593?q=80&w=300&h=300&fit=crop";
