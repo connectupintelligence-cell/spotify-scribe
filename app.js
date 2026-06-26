@@ -575,17 +575,28 @@ function processSpotifyLink() {
     // Inicia loader e faz requisição de metadados à API oEmbed pública do Spotify
     showLoader("Acessando metadados do Spotify...", "Obtendo título, capa e informações do episódio em tempo real.", async () => {
       try {
-                const oembedUrl = `https://open.spotify.com/oembed?url=${encodeURIComponent(url)}`;
-        const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(oembedUrl)}`;
+        const oembedUrl = `https://open.spotify.com/oembed?url=${encodeURIComponent(url)}`;
         
-        // Chamada real ao oEmbed via proxy CORS (com timeout curto para evitar esperas eternas)
+        // Chamada real ao oEmbed (com timeout curto para evitar esperas eternas)
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 6000);
         
-        const response = await fetch(proxyUrl, { signal: controller.signal });
+        let response;
+        try {
+          // Tenta chamada direta primeiro (Spotify oEmbed suporta CORS nativo)
+          response = await fetch(oembedUrl, { signal: controller.signal });
+        } catch (directErr) {
+          console.warn("Chamada direta ao Spotify oEmbed falhou (CORS/rede), tentando via proxy:", directErr);
+          try {
+            const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(oembedUrl)}`;
+            response = await fetch(proxyUrl, { signal: controller.signal });
+          } catch (proxyErr) {
+            throw new Error("Ambas as conexões (direta e proxy) falharam ao consultar o Spotify.");
+          }
+        }
         clearTimeout(timeoutId);
         
-        if (!response.ok) throw new Error("Não foi possível obter dados públicos deste link via proxy.");
+        if (!response.ok) throw new Error("A resposta do servidor do Spotify não foi bem-sucedida.");
         const data = await response.json();
         
         // Trata os metadados reais obtidos
